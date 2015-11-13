@@ -14,6 +14,9 @@ from functools import partial
 
 sql_log = logging.getLogger('psql')
 
+class TableNotExist(Exception):
+    pass
+
 class ObjectDictCursor(extras.RealDictCursor):
     def __init__(self, *args, **kwargs):
         kwargs['row_factory'] = ObjectDictRow
@@ -233,10 +236,13 @@ class PsqlTable(object):
 
     def columns(self):
         pg_class = PsqlTable(debug = False, cur = self._cur, table_name = 'pg_class')
-        oid = pg_class.find_one({'relname': self.rel_table_name,
+        _record = pg_class.find_one({'relname': self.rel_table_name,
             't1.nspname': self.nsp_table_name}, 
             ['pg_class.oid'], 
-            join = [('relnamespace', 'pg_namespace.oid', 'LEFT')])['oid']
+            join = [('relnamespace', 'pg_namespace.oid', 'LEFT')])
+
+        if not _record:
+            raise TableNotExist(self.table_name)
 
         sql = """SELECT a.attname as name,
           pg_catalog.format_type(a.atttypid, a.atttypmod) as type,a.attnotnull as not_null  
