@@ -262,7 +262,11 @@ class PsqlTable(object):
         if sql[-1] != utf8(';'):
             sql += utf8(';')
 
-        self._cur.execute(utf8(sql))
+        try:
+            self._cur.execute(utf8(sql))
+        except:
+            self._cur.connection.rollback()
+            raise
 
         if debug:
             sql_log.info(utf8(sql))
