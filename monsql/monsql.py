@@ -12,9 +12,8 @@ from monsql.util import utf8
 from monsql.e import *
 from monsql.cursor import *
 
-__all__ = ['connection']
+__all__ = ['connection', 'Cursor']
 
-_DB_DRIVE = None
 
 sql_log = logging.getLogger('monsql')
 
@@ -217,7 +216,6 @@ class _BaseTable(object):
         if isinstance(returning, list):
             sql += utf8(' RETURNING ' + (returning and ', '.join(returning) or '*'))
 
-        print(sql)
         if sql[-1] != utf8(';'):
             sql += utf8(';')
 
@@ -335,26 +333,25 @@ class Cursor(object):
         if name in dir(self._cur):
             return getattr(self._cur, name)
         else:
-            return self.table_instance(name, cur = self._cur, debug = self.debug)
+            return self.table_instance(name, cur = self._cur, debug = self.debug, conn = self._conn)
 
     def __getitem__(self, name):
-        return self.table_instance(name, cur = self._cur, debug = self.debug)
+        return self.table_instance(name, cur = self._cur, debug = self.debug, conn = self._conn)
 
-    def get_tables(self):
-        records = self.pg_tables.find({'schemaname': 'public'})
-            # sql list all tables: 
-        return [record.tablename for record in records]
+    def tables(self):
+        return self._conn.tables()
 
     def new(self, arg, kwargs):
         return Cursor(self._conn.cursor(*arg, **kwargs), self.debug, self._conn)
 
 class _BaseConnection(object):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, db_driver, *args, **kwargs):
         self.args = args
         self.kwargs = kwargs
         self.debug = kwargs.pop('debug', False)
         self.table_instance = self.get_table_instance()
         self._conn = None
+        self.db_driver = db_driver
         if self.debug:
             config_logging()
 
@@ -368,32 +365,39 @@ class _BaseConnection(object):
         return False
 
     def __getitem__(self, name):
-        return self.table_instance(name, conn = self.__conn, debug = self.debug)
+        return self.table_instance(name, conn = self.get_connection(), debug = self.debug)
 
     def __getattr__(self, name): 
-        if name in dir(self.__conn):
-            return getattr(self.__conn, name)
+        if name in dir(self.get_connection()):
+            return getattr(self.get_connection(), name)
         else:
-            return self.table_instance(name, conn = self.__conn, debug = self.debug)
+            return self.table_instance(name, conn = self.get_connection(), debug = self.debug)
 
-    @property
-    def __conn(self):
+    def get_connection(self):
         if self.closed():
             self._conn = self.connect()
         return self._conn
 
+    def rollback(self):
+        self.get_connection().rollback()
+
+    def commit(self):
+        self.get_connection().commit()
+
     def cursor(self, *args, **kwargs):
-        _cur = Cursor(self.__conn.cursor(*args, **kwargs),
-                self.debug, self.__conn, self.table_instance())
+        _cur = Cursor(self.get_connection().cursor(*args, **kwargs),
+                self.debug, self.get_connection(), self.table_instance)
 
         _cur.new = partial(_cur.new, args, kwargs)
         return _cur
 
     def connect(self):
-        assert _DB_DRIVE
-        conn = _DB_DRIVE.connect(*self.args, **self.kwargs)
+        conn = self.db_driver.connect(*self.args, **self.kwargs)
         print('connect')
         return conn
+
+    def tables(self):
+        raise NotImplementedError
 
 class PsqlConnection(_BaseConnection):
     def closed(self):
@@ -405,14 +409,25 @@ class PsqlConnection(_BaseConnection):
     def get_table_instance(self):
         return PsqlTable
 
+    def tables(self):
+        records = self.pg_tables.find({'schemaname': 'public'})
+            # sql list all tables: 
+        return [record.tablename for record in records]
+
 class MysqlConnection(_BaseConnection):
     def get_table_instance(self):
         return MysqlTable
 
+    def tables(self):
+        _cur = self.get_connection().cursor()
+        _cur.execute('show tables;')
+        _records = Record(_cur)
+        tables = [record.values()[0] for record in _records]
+        return tables
+
 ALL_DRIVERS = ('psycopg2', 'pymysql')
 
 def connection(driver, database = None, user = None, password = None, host = None, **kwargs):
-    global _DB_DRIVE
     if driver not in (ALL_DRIVERS):
         raise NotSuportedDriver('only suported %s!' % (', '.join(ALL_DRIVERS), ))
 
@@ -433,8 +448,9 @@ def connection(driver, database = None, user = None, password = None, host = Non
         __connection = PsqlConnection
     elif driver == 'pymysql':
         kwargs['use_unicode'] = True
+        kwargs.setdefault('charset', 'utf8')
         kwargs.setdefault('cursorclass', mysql_dict_cursor())
         __connection = MysqlConnection
 
-    return __connection(**kwargs)
+    return __connection(_DB_DRIVE, **kwargs)
 

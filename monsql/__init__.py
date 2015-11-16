@@ -6,5 +6,7 @@
 # Filename      : __init__.py
 # Description   : 
 from __future__ import absolute_import
-from monsql.monsql  import connection
+from monsql.monsql  import *
+
+version = 0.8
 

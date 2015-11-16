@@ -6,11 +6,14 @@
 # Filename      : setup.py
 # Description   : 
 from distutils.core import setup
+import monsql
 
 setup(
-        name = 'mpsql',
-        version = '0.6',
+        name = 'monsql',
+        version = str(monsql.version),
         author = 'moment-x',
-        py_modules = ['mpsql'],
+        packages = [
+            'monsql',
+            ],
         )
 
