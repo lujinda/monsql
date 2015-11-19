@@ -3,3 +3,4 @@ build/
 *~
 *.swp
 test.py
+dist/
