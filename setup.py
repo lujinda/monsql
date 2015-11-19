@@ -9,7 +9,7 @@ from distutils.core import setup
 import monsql
 
 setup(
-        name = 'monsql',
+        name = 'pymonsql',
         version = str(monsql.version),
         author = 'moment-x',
         packages = [

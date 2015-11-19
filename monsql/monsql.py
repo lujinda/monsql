@@ -34,7 +34,7 @@ def generate_json_where(field, key, value, rel = None, _type = None):
 
 def config_logging():
     handler = logging.StreamHandler()
-    formatter = logging.Formatter('%(filename)s:%(lineno)s %(message)s')
+    formatter = logging.Formatter(utf8('%(filename)s:%(lineno)s %(message)s'))
     handler.setFormatter(formatter)
     sql_log.addHandler(handler)
     sql_log.setLevel(logging.DEBUG)
@@ -219,14 +219,16 @@ class _BaseTable(object):
         if sql[-1] != utf8(';'):
             sql += utf8(';')
 
+        if debug:
+            print(type(sql))
+            sql_log.info(utf8(sql))
+
         try:
             self._cur.execute(utf8(sql))
         except:
             self._cur.connection.rollback()
             raise
 
-        if debug:
-            sql_log.info(utf8(sql))
 
         if returning == None:
             return
