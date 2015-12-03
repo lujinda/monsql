@@ -17,6 +17,11 @@ __all__ = ['connection', 'Cursor']
 
 sql_log = logging.getLogger('monsql')
 
+class MonType():
+    def __init__(self, data, _type):
+        self.data = data
+        self._type = _type
+
 def generate_json_where(field, key, value, rel = None, _type = None):
     """会返回字典格式"""
     if _type == None:
@@ -127,6 +132,7 @@ class _BaseTable(object):
         return Record(self._cur)
 
     def find_one(self, *args, **kwargs):
+        kwargs.setdefault('limit', '1')
         record_iter = self.find(*args, **kwargs)
         record = record_iter and record_iter.next() or {}
         del record_iter
@@ -220,7 +226,6 @@ class _BaseTable(object):
             sql += utf8(';')
 
         if debug:
-            print(type(sql))
             sql_log.info(utf8(sql))
 
         try:
@@ -302,7 +307,7 @@ class PsqlTable(_BaseTable):
 
 
     def columns(self):
-        pg_class = PsqlTable(debug = False, cur = self._cur, table_name = 'pg_class')
+        pg_class = PsqlTable(debug = False, cur = self._cur, table_name = 'pg_class', conn = self.conn)
         _record = pg_class.find_one({'relname': self.rel_table_name,
             't1.nspname': self.nsp_table_name}, 
             ['pg_class.oid'], 
@@ -310,6 +315,8 @@ class PsqlTable(_BaseTable):
 
         if not _record:
             raise TableNotExist(self.table_name)
+
+        oid = _record['oid']
 
         sql = """SELECT a.attname as name,
           pg_catalog.format_type(a.atttypid, a.atttypmod) as type,a.attnotnull as not_null  
@@ -344,7 +351,7 @@ class Cursor(object):
         return self._conn.tables()
 
     def new(self, arg, kwargs):
-        return Cursor(self._conn.cursor(*arg, **kwargs), self.debug, self._conn)
+        return Cursor(self._conn.cursor(*arg, **kwargs), self.debug, self._conn, self.table_instance)
 
 class _BaseConnection(object):
     def __init__(self, db_driver, *args, **kwargs):
@@ -388,7 +395,7 @@ class _BaseConnection(object):
 
     def cursor(self, *args, **kwargs):
         _cur = Cursor(self.get_connection().cursor(*args, **kwargs),
-                self.debug, self.get_connection(), self.table_instance)
+                self.debug, self, self.table_instance)
 
         _cur.new = partial(_cur.new, args, kwargs)
         return _cur

@@ -8,5 +8,5 @@
 from __future__ import absolute_import
 from monsql.monsql  import *
 
-version = 0.9
+version = 1.1
 
