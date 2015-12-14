@@ -205,7 +205,14 @@ class _BaseTable(object):
         if not ext:
             return ''
         _ext_list = []
-        for _k, _v in ext.items():
+        ext_items = ext.items()
+        def sorted_ext_items(items):
+            ext_order = ['group_by', 'having', 'order_by', 'limit', 'offset']
+            return sorted(items, 
+                    key = lambda item: ext_order.index(item[0].lower()))
+
+
+        for _k, _v in sorted_ext_items(ext_items):
             if _v == None:
                 continue
             _k = _k.replace('_', ' ').upper()
